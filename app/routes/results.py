@@ -3,7 +3,10 @@ from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
 from bson import ObjectId
 from app.database import get_database
-from app.schemas.schemas import ResultCreate, BulkResultUpload, ResultOut, ResultStatus, AcademicSummary, SemesterGPA, StudentOut
+from app.schemas.schemas import (
+    ResultCreate, BulkResultUpload, ResultOut, ResultStatus, 
+    AcademicSummary, SemesterGPA, StudentOut, Semester
+)
 from app.utils.auth import get_current_user, require_lecturer, require_admin
 from app.services.grading_service import get_degree_classification
 import pandas as pd
