@@ -9,8 +9,6 @@ from app.schemas.schemas import (
 )
 from app.utils.auth import get_current_user, require_lecturer, require_admin
 from app.services.grading_service import get_degree_classification
-import pandas as pd
-import io
 
 router = APIRouter()
 
@@ -79,6 +77,9 @@ async def upload_csv_results(
     semester: Semester = Query(...),
     current_user: dict = Depends(require_lecturer)
 ):
+    import pandas as pd
+    import io
+    
     db = get_database()
     
     # Verify course is assigned to this lecturer
