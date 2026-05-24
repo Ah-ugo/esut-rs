@@ -8,17 +8,9 @@ from app.schemas.schemas import (
     AcademicSummary, SemesterGPA, StudentOut, Semester
 )
 from app.utils.auth import get_current_user, require_lecturer, require_admin
-from app.services.grading_service import get_degree_classification
+from app.services.grading_service import get_degree_classification, calculate_grade, get_grading_system
 
 router = APIRouter()
-
-def calculate_grade(score: float):
-    if score >= 70: return "A", 5.0
-    if score >= 60: return "B", 4.0
-    if score >= 50: return "C", 3.0
-    if score >= 45: return "D", 2.0
-    if score >= 40: return "E", 1.0
-    return "F", 0.0
 
 @router.post("/", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def add_result(result_data: ResultCreate, current_user: dict = Depends(require_lecturer)):
@@ -45,8 +37,11 @@ async def add_result(result_data: ResultCreate, current_user: dict = Depends(req
     if not course:
         raise HTTPException(status_code=404, detail=f"Course with code {result_data.course_code} not found")
     course_id = str(course["_id"])
-        
-    grade, points = calculate_grade(result_data.score)
+
+    # Use central grading service
+    programme_id = course.get("programme_id")
+    grading_system = await get_grading_system(programme_id)
+    grade, points, remark = calculate_grade(result_data.score, grading_system)
     
     result_doc = {
         "student_id": student_id,
@@ -83,23 +78,74 @@ async def upload_csv_results(
     db = get_database()
     
     # Verify course is assigned to this lecturer
-    course = await db.courses.find_one({
+    assigned_course = await db.courses.find_one({
         "code": course_code.upper(),
         "lecturer_id": str(current_user["_id"]),
         "session": session,
         "semester": semester
     })
     
-    if not course:
+    if not assigned_course:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Course {course_code} is not assigned to you for {session} {semester} semester"
         )
 
-    # Placeholder for CSV processing logic
     content = await file.read()
     df = pd.read_csv(io.BytesIO(content))
-    return {"message": f"CSV received. {len(df)} rows detected for processing."}
+    
+    # Standardize headers
+    df.columns = [c.lower().strip() for c in df.columns]
+    
+    grading_system = await get_grading_system(assigned_course.get("programme_id"))
+    results_to_insert = []
+    errors = []
+
+    for idx, row in df.iterrows():
+        matric = str(row.get('matric_number', '')).strip().upper()
+        score = float(row.get('score', 0))
+        
+        student = await db.students.find_one({"matric_number": matric})
+        if not student:
+            errors.append(f"Row {idx+2}: Student {matric} not found")
+            continue
+            
+        grade, points, _ = calculate_grade(score, grading_system)
+        
+        results_to_insert.append({
+            "student_id": str(student["_id"]),
+            "matric_number": matric,
+            "course_id": str(assigned_course["_id"]),
+            "course_code": course_code.upper(),
+            "lecturer_id": str(current_user["_id"]),
+            "score": score,
+            "grade": grade,
+            "grade_point": points,
+            "session": session,
+            "semester": semester,
+            "status": "pending",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        })
+
+    if results_to_insert:
+        # Use upsert logic or delete old pending entries to avoid index collision
+        for doc in results_to_insert:
+            await db.results.update_one(
+                {
+                    "student_id": doc["student_id"],
+                    "course_id": doc["course_id"],
+                    "session": doc["session"],
+                    "semester": doc["semester"]
+                },
+                {"$set": doc},
+                upsert=True
+            )
+            
+    return {
+        "message": f"Processed {len(results_to_insert)} results",
+        "errors": errors
+    }
 
 @router.post("/bulk", status_code=status.HTTP_201_CREATED)
 async def bulk_upload_results(upload_data: BulkResultUpload, current_user: dict = Depends(require_lecturer)):
