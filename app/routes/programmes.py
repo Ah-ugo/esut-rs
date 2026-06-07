@@ -22,8 +22,16 @@ async def create_programme(data: ProgrammeCreate, current_user: dict = Depends(r
     doc["updated_at"] = datetime.utcnow()
     
     result = await db.programmes.insert_one(doc)
-    doc["id"] = str(result.inserted_id)
-    return doc
+    return {
+        "id": str(result.inserted_id),
+        "name": doc.get("name"),
+        "code": doc.get("code"),
+        "faculty": doc.get("faculty"),
+        "department": doc.get("department"),
+        "duration_years": doc.get("duration_years"),
+        "description": doc.get("description"),
+        "created_at": doc.get("created_at"),
+    }
 
 
 @router.get("/")
