@@ -23,12 +23,28 @@ async def get_admin_stats(current_user: dict = Depends(require_admin)):
     recent = await db.results.find({}).sort("created_at", -1).limit(5).to_list(5)
     recent_uploads = []
     for r in recent:
-        student = await db.students.find_one({"_id": ObjectId(r["student_id"])}) if r.get("student_id") else None
-        course = await db.courses.find_one({"_id": ObjectId(r["course_id"])}) if r.get("course_id") else None
+        # Prefer stable lookup via matric_number (results docs should store this).
+        # Fall back to student_id if available (legacy documents).
+        student = None
+        if r.get("matric_number"):
+            student = await db.students.find_one({"matric_number": str(r.get("matric_number")).upper()})
+        elif r.get("student_id"):
+            try:
+                student = await db.students.find_one({"_id": ObjectId(r["student_id"])})
+            except Exception:
+                student = None
+
+        course = None
+        if r.get("course_id"):
+            try:
+                course = await db.courses.find_one({"_id": ObjectId(r["course_id"])})
+            except Exception:
+                course = None
+
         recent_uploads.append({
             "id": str(r["_id"]),
             "student_name": student.get("full_name") if student else "Unknown",
-            "matric_number": student.get("matric_number") if student else "",
+            "matric_number": student.get("matric_number") if student else (r.get("matric_number") or ""),
             "course_code": course.get("code") if course else "",
             "score": r.get("score"),
             "grade": r.get("grade"),
