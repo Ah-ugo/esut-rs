@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
+
 from bson import ObjectId
 from app.database import get_database
 from app.utils.auth import require_admin
@@ -97,8 +98,42 @@ async def get_grading_config(
     return config or {"programme_id": programme_id, "grades": []}
 
 
+@router.post("/current-session")
+async def set_current_session(
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_admin),
+):
+    """Set the active academic session for a programme."""
+    db = get_database()
+    programme_id = payload.get("programme_id")
+    session = payload.get("session")
+
+    if not session:
+        raise HTTPException(status_code=422, detail="session is required")
+
+    # Store as programme-specific or global (programme_id can be None)
+    await db.current_sessions.update_one(
+        {"programme_id": programme_id},
+        {"$set": {"programme_id": programme_id, "session": session, "updated_at": datetime.utcnow()}},
+        upsert=True,
+    )
+    return {"message": "Current session updated", "programme_id": programme_id, "session": session}
+
+
+@router.get("/current-session")
+async def get_current_session(
+    programme_id: Optional[str] = None,
+    current_user: dict = Depends(require_admin),
+):
+    """Get the active academic session for a programme (admin access)."""
+    db = get_database()
+    doc = await db.current_sessions.find_one({"programme_id": programme_id})
+    return doc or {"programme_id": programme_id, "session": None}
+
+
 @router.get("/pending-results")
 async def get_pending_results(
+
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(require_admin)
