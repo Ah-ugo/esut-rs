@@ -62,7 +62,22 @@ async def create_student(data: StudentCreate, current_user: dict = Depends(requi
     })
     
     doc["id"] = str(result.inserted_id)
-    return doc
+    return {
+        "id": doc["id"],
+        "matric_number": doc.get("matric_number"),
+        "full_name": doc.get("full_name"),
+        "email": doc.get("email"),
+        "programme_id": doc.get("programme_id"),
+        "level": doc.get("level"),
+        "entry_year": doc.get("entry_year"),
+        "gender": doc.get("gender"),
+        "date_of_birth": doc.get("date_of_birth"),
+        "phone": doc.get("phone"),
+        "address": doc.get("address"),
+        "photo_url": doc.get("photo_url"),
+        "created_at": doc.get("created_at"),
+        "updated_at": doc.get("updated_at"),
+    }
 
 
 @router.get("/")
