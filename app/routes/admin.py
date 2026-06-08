@@ -130,10 +130,20 @@ async def get_current_session(
     """Get the active academic session for a programme.
 
     Read access is allowed for admin/lecturers/students. Session updates remain admin-only.
+
+    Note: never return raw Mongo documents (they may contain ObjectId, which FastAPI can't JSON-encode).
     """
     db = get_database()
     doc = await db.current_sessions.find_one({"programme_id": programme_id})
-    return doc or {"programme_id": programme_id, "session": None}
+
+    if not doc:
+        return {"programme_id": programme_id, "session": None}
+
+    return {
+        "programme_id": str(doc.get("programme_id")) if doc.get("programme_id") else None,
+        "session": doc.get("session"),
+    }
+
 
 
 
