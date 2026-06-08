@@ -123,12 +123,16 @@ async def set_current_session(
 @router.get("/current-session")
 async def get_current_session(
     programme_id: Optional[str] = None,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_role("admin", "lecturer", "student")),
 ):
-    """Get the active academic session for a programme (admin access)."""
+    """Get the active academic session for a programme.
+
+    Read access is allowed for admin/lecturers/students. Session updates remain admin-only.
+    """
     db = get_database()
     doc = await db.current_sessions.find_one({"programme_id": programme_id})
     return doc or {"programme_id": programme_id, "session": None}
+
 
 
 @router.get("/pending-results")
