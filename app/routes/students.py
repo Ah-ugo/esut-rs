@@ -38,6 +38,12 @@ async def create_student(data: StudentCreate, current_user: dict = Depends(requi
     if await db.students.find_one({"matric_number": data.matric_number.upper()}):
         raise HTTPException(status_code=400, detail="Matric number already exists")
     
+    if await db.users.find_one({"email": data.email}):
+        raise HTTPException(status_code=400, detail="A user with this email already exists")
+        
+    if await db.students.find_one({"email": data.email}):
+        raise HTTPException(status_code=400, detail="A student with this email already exists")
+    
     if not await db.programmes.find_one({"_id": ObjectId(data.programme_id)}):
         raise HTTPException(status_code=404, detail="Programme not found")
     
