@@ -207,13 +207,10 @@ async def get_student_results(student_id: str):
         else:
             # If student_id is User ID, find the Profile ID
             user = await db.users.find_one({"_id": obj_id})
-            if user and user.get("matric_number"):
-                profile = await db.students.find_one({"matric_number": user["matric_number"].upper()})
-                if profile:
-                    student_ids.append(str(profile["_id"]))
     except Exception:
+        # If conversion to ObjectId fails, treat student_id as a string ID
         pass
-
+    # Build aggregation pipeline to join courses and enrich result fields
     pipeline = [
         {"$match": {"student_id": {"$in": student_ids}}},
         {
@@ -221,7 +218,7 @@ async def get_student_results(student_id: str):
                 "from": "courses",
                 "let": {"c_id": "$course_id"},
                 "pipeline": [
-                    {"$match": {"$expr": {"$eq": [{"$toString": "$_id"}, "$$c_id"]}}}
+                    {"$match": {"$expr": {"$eq": [{"$toString": "$_id"}, "$${c_id}"]}}}
                 ],
                 "as": "course_info"
             }
@@ -230,10 +227,13 @@ async def get_student_results(student_id: str):
         {
             "$addFields": {
                 "id": {"$toString": "$_id"},
-                "grade_point": {"$ifNull": ["$grade_point", "$points", 0.0]}, # Handle legacy 'points' field
+                "grade_point": {"$ifNull": ["$grade_point", "$points", 0.0]},
                 "course_code": "$course_info.code",
                 "course_title": "$course_info.title",
-                "course_units": "$course_info.units"
+                "course_units": "$course_info.units",
+                # Include status and level for summary calculations
+                "status": "$status",
+                "level": "$level"
             }
         },
         {"$project": {"course_info": 0, "_id": 0}}
@@ -298,8 +298,14 @@ async def get_student_academic_summary(student_id: str, current_user: dict = Dep
     
     cgpa = round(total_points_earned / total_units_attempted, 2) if total_units_attempted > 0 else 0.0
     
-    # Fetch programme name
-    prog = await db.programmes.find_one({"_id": ObjectId(student["programme_id"])})
+    # Fetch programme name – guard against missing programme_id
+    prog = None
+    try:
+        if student.get("programme_id"):
+            prog = await db.programmes.find_one({"_id": ObjectId(student["programme_id"])})
+    except Exception as e:
+        # Log the error internally (omitted here) and continue with None
+        prog = None
     
     return AcademicSummary(
         student={
@@ -307,7 +313,7 @@ async def get_student_academic_summary(student_id: str, current_user: dict = Dep
             "matric_number": student["matric_number"],
             "full_name": student["full_name"],
             "email": student["email"],
-            "programme_id": student["programme_id"],
+        "programme_id": student.get("programme_id"),
             "programme_name": prog["name"] if prog else "Unknown",
             "level": student["level"],
             "entry_year": student["entry_year"],
