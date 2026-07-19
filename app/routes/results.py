@@ -381,7 +381,7 @@ async def get_student_academic_summary(student_id: str, current_user: dict = Dep
             "programme_name": prog["name"] if prog else "Unknown",
             "level": student.get("level", 100),
             "entry_year": student.get("entry_year", datetime.utcnow().year),
-            "gender": student.get("gender", "Other"),
+            "gender": student.get("gender", "Other").capitalize(),
             "created_at": student.get("created_at", datetime.utcnow())
         },
         semesters=sorted(semesters, key=lambda x: (x.session, x.semester)),
