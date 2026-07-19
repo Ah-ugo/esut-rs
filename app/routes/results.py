@@ -233,7 +233,8 @@ async def get_student_results(student_id: str):
                 "course_units": "$course_info.units",
                 # Include status and level for summary calculations
                 "status": "$status",
-                "level": "$level"
+                "level": "$level",
+                "created_at": {"$ifNull": ["$created_at", "$$NOW"]}
             }
         },
         {"$project": {"course_info": 0, "_id": 0}}
@@ -282,15 +283,15 @@ async def get_student_academic_summary(student_id: str, current_user: dict = Dep
         return AcademicSummary(
             student={
                 "id": str(student["_id"]),
-                "matric_number": student["matric_number"],
-                "full_name": student["full_name"],
-                "email": student["email"],
-                "programme_id": student.get("programme_id"),
+                "matric_number": student.get("matric_number", ""),
+                "full_name": student.get("full_name", ""),
+                "email": student.get("email", ""),
+                "programme_id": student.get("programme_id", ""),
                 "programme_name": "Unknown",
-                "level": student["level"],
-                "entry_year": student["entry_year"],
-                "gender": student["gender"],
-                "created_at": student["created_at"],
+                "level": student.get("level", 100),
+                "entry_year": student.get("entry_year", datetime.utcnow().year),
+                "gender": student.get("gender", "Other"),
+                "created_at": student.get("created_at", datetime.utcnow()),
             },
             semesters=[],
             cgpa=0.0,
@@ -373,15 +374,15 @@ async def get_student_academic_summary(student_id: str, current_user: dict = Dep
     return AcademicSummary(
         student={
             "id": str(student["_id"]),
-            "matric_number": student["matric_number"],
-            "full_name": student["full_name"],
-            "email": student["email"],
-        "programme_id": student.get("programme_id"),
+            "matric_number": student.get("matric_number", ""),
+            "full_name": student.get("full_name", ""),
+            "email": student.get("email", ""),
+            "programme_id": student.get("programme_id", ""),
             "programme_name": prog["name"] if prog else "Unknown",
-            "level": student["level"],
-            "entry_year": student["entry_year"],
-            "gender": student["gender"],
-            "created_at": student["created_at"]
+            "level": student.get("level", 100),
+            "entry_year": student.get("entry_year", datetime.utcnow().year),
+            "gender": student.get("gender", "Other"),
+            "created_at": student.get("created_at", datetime.utcnow())
         },
         semesters=sorted(semesters, key=lambda x: (x.session, x.semester)),
         cgpa=cgpa,
