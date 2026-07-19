@@ -275,46 +275,91 @@ async def get_student_academic_summary(student_id: str, current_user: dict = Dep
 
     # Get all approved results with course info
     results = await get_student_results(str(student["_id"]))
-    approved_results = [r for r in results if r["status"] == "approved"]
-    
+    approved_results = [r for r in results if r.get("status") == "approved"]
+
+    # If the student has no approved results, return an empty but valid summary
+    if not approved_results:
+        return AcademicSummary(
+            student={
+                "id": str(student["_id"]),
+                "matric_number": student["matric_number"],
+                "full_name": student["full_name"],
+                "email": student["email"],
+                "programme_id": student.get("programme_id"),
+                "programme_name": "Unknown",
+                "level": student["level"],
+                "entry_year": student["entry_year"],
+                "gender": student["gender"],
+                "created_at": student["created_at"],
+            },
+            semesters=[],
+            cgpa=0.0,
+            total_units_attempted=0,
+            degree_class=get_degree_classification(0.0),
+        )
+
     # Group by session and semester
-    sem_data = {}
+    sem_data: Dict[str, List[Dict[str, Any]]] = {}
     for r in approved_results:
-        key = f"{r['session']}-{r['semester']}"
+        sess = r.get("session")
+        sem = r.get("semester")
+        key = f"{sess}-{sem}"
         if key not in sem_data:
             sem_data[key] = []
         sem_data[key].append(r)
-        
-    semesters = []
-    all_approved_courses = [] # To track all results for CGPA calculation
-    
+
+    semesters: List[SemesterGPA] = []
+    all_approved_courses: List[Dict[str, Any]] = []  # For CGPA calculation
+
     for key, items in sem_data.items():
-        session, semester = key.split("-")
-        s_units = sum(i.get("course_units", 0) for i in items)
-        s_points = sum(i.get("course_units", 0) * i.get("grade_point", 0.0) for i in items)
+        if not items:
+            continue
+        session, semester = key.split("-", 1)
+
+        s_units = sum(i.get("course_units", 0) or 0 for i in items)
+        s_points = sum(
+            (i.get("course_units", 0) or 0) * (i.get("grade_point", 0.0) or 0.0)
+            for i in items
+        )
         all_approved_courses.extend(items)
-        
-        semesters.append(SemesterGPA(
-            session=session,
-            semester=semester,
-            level=items[0].get("level", 100),
-            total_units=s_units,
-            total_points=s_points,
-            gpa=round(s_points / s_units, 2) if s_units > 0 else 0.0,
-            results=items  # Changed from 'courses' to 'results' to fix frontend crash
-        ))
+
+        first = items[0] if items else {}
+        semesters.append(
+            SemesterGPA(
+                session=session,
+                semester=semester,
+                level=first.get("level", 100),
+                total_units=s_units,
+                total_points=s_points,
+                gpa=round(s_points / s_units, 2) if s_units > 0 else 0.0,
+                results=items,  # frontend expects `results`
+            )
+        )
 
     # Calculate CGPA using best result per course (ESUT Standard)
-    best_results = {}
+    best_results: Dict[str, Dict[str, Any]] = {}
     for r in all_approved_courses:
-        code = r["course_code"]
-        if code not in best_results or r.get("grade_point", 0) > best_results[code].get("grade_point", 0):
+        code = r.get("course_code")
+        if not code:
+            continue
+        if (
+            code not in best_results
+            or (r.get("grade_point", 0) or 0) > (best_results[code].get("grade_point", 0) or 0)
+        ):
             best_results[code] = r
-            
-    total_units_attempted = sum(r.get("course_units", 0) for r in best_results.values())
-    total_points_earned = sum(r.get("course_units", 0) * r.get("grade_point", 0.0) for r in best_results.values())
-    
-    cgpa = round(total_points_earned / total_units_attempted, 2) if total_units_attempted > 0 else 0.0
+
+    total_units_attempted = sum(r.get("course_units", 0) or 0 for r in best_results.values())
+    total_points_earned = sum(
+        (r.get("course_units", 0) or 0) * (r.get("grade_point", 0.0) or 0.0)
+        for r in best_results.values()
+    )
+
+    cgpa = (
+        round(total_points_earned / total_units_attempted, 2)
+        if total_units_attempted > 0
+        else 0.0
+    )
+
     
     # Fetch programme name – guard against missing programme_id
     prog = None
