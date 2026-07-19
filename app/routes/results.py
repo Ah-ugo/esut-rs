@@ -218,7 +218,7 @@ async def get_student_results(student_id: str):
                 "from": "courses",
                 "let": {"c_id": "$course_id"},
                 "pipeline": [
-                    {"$match": {"$expr": {"$eq": [{"$toString": "$_id"}, "$${c_id}"]}}}
+                    {"$match": {"$expr": {"$eq": [{"$toString": "$_id"}, "$$c_id"]}}}
                 ],
                 "as": "course_info"
             }
