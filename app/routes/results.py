@@ -244,16 +244,34 @@ async def get_student_results(student_id: str):
 @router.get("/student/{student_id}/summary", response_model=AcademicSummary)
 async def get_student_academic_summary(student_id: str, current_user: dict = Depends(get_current_user)):
     db = get_database()
-    
-    # Resolve student record (handling potential UserID vs StudentID mismatch)
-    student = await db.students.find_one({"_id": ObjectId(student_id)})
+
+    # Resolve student record robustly.
+    # - student_id might be a Mongo ObjectId
+    # - or (in some flows) a non-ObjectId value (e.g., bad param / mismatch)
+    student = None
+
+    # 1) Try Mongo _id lookup (guard against invalid ObjectId strings)
+    try:
+        student = await db.students.find_one({"_id": ObjectId(student_id)})
+    except Exception:
+        student = None
+
+    # 2) If not found, try mapping via users -> students (also guard ObjectId)
     if not student:
-        user = await db.users.find_one({"_id": ObjectId(student_id)})
+        try:
+            user = await db.users.find_one({"_id": ObjectId(student_id)})
+        except Exception:
+            user = None
         if user and user.get("matric_number"):
             student = await db.students.find_one({"matric_number": user["matric_number"]})
-            
+
+    # 3) Final fallback: treat incoming id as matric_number
+    if not student:
+        student = await db.students.find_one({"matric_number": str(student_id).upper()})
+
     if not student:
         raise HTTPException(status_code=404, detail="Student record not found")
+
 
     # Get all approved results with course info
     results = await get_student_results(str(student["_id"]))
