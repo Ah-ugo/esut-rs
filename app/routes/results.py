@@ -16,15 +16,21 @@ router = APIRouter()
 async def add_result(result_data: ResultCreate, current_user: dict = Depends(require_lecturer)):
     db = get_database()
     
-    # Verify course is assigned to this lecturer
+    # Verify course is assigned to this lecturer for the given session.
+    # We look up by course code, lecturer, and session. If semester matches or course defines it, we auto-align.
     course_assignment = await db.courses.find_one({
         "code": result_data.course_code.upper(),
         "lecturer_id": str(current_user["_id"]),
         "session": result_data.session,
-        "semester": result_data.semester
     })
     if not course_assignment:
-        raise HTTPException(status_code=403, detail=f"Course {result_data.course_code} is not assigned to you for {result_data.session} ({result_data.semester} semester)")
+        raise HTTPException(
+            status_code=403,
+            detail=f"Course {result_data.course_code} is not assigned to you for {result_data.session}"
+        )
+
+    # Use the assigned course's official semester if set, otherwise fallback to user input
+    effective_semester = course_assignment.get("semester") or result_data.semester
 
     # Resolve matric_number to student profile ID (db.students)
     student_profile = await db.students.find_one({"matric_number": result_data.matric_number.upper()})
@@ -53,7 +59,7 @@ async def add_result(result_data: ResultCreate, current_user: dict = Depends(req
         "grade": grade,
         "grade_point": points,
         "session": result_data.session,
-        "semester": result_data.semester,
+        "semester": effective_semester,
         "status": "pending",
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
@@ -82,14 +88,15 @@ async def upload_csv_results(
         "code": course_code.upper(),
         "lecturer_id": str(current_user["_id"]),
         "session": session,
-        "semester": semester
     })
     
     if not assigned_course:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Course {course_code} is not assigned to you for {session} {semester} semester"
+            detail=f"Course {course_code} is not assigned to you for {session}"
         )
+    
+    effective_semester = assigned_course.get("semester") or semester
 
     content = await file.read()
     df = pd.read_csv(io.BytesIO(content))
@@ -122,7 +129,7 @@ async def upload_csv_results(
             "grade": grade,
             "grade_point": points,
             "session": session,
-            "semester": semester,
+            "semester": effective_semester,
             "status": "pending",
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
@@ -159,9 +166,10 @@ async def bulk_upload_results(upload_data: BulkResultUpload, current_user: dict 
 
     # Verify course is assigned to this lecturer
     if (course.get("lecturer_id") != str(current_user["_id"]) or 
-        course.get("session") != upload_data.session or
-        course.get("semester") != upload_data.semester):
-        raise HTTPException(status_code=403, detail="You are not assigned to this course for the selected session/semester")
+        course.get("session") != upload_data.session):
+        raise HTTPException(status_code=403, detail="You are not assigned to this course for the selected session")
+
+    effective_semester = course.get("semester") or upload_data.semester
 
     for entry in upload_data.results:
         student_profile = await db.students.find_one({"matric_number": entry.matric_number.upper()})
@@ -179,7 +187,7 @@ async def bulk_upload_results(upload_data: BulkResultUpload, current_user: dict 
             "grade": grade,
             "grade_point": points,
             "session": upload_data.session,
-            "semester": upload_data.semester,
+            "semester": effective_semester,
             "status": "pending",
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
