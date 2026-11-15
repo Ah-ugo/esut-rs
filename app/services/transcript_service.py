@@ -22,21 +22,22 @@ _STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 LOGO_PATH = os.path.join(_STATIC_DIR, "esut-logo.png")
 
 
-# ESUT Brand Colors
-ESUT_GREEN = colors.HexColor("#1a5c38")
+# ESUT Brand Colors (Matching official ESUT Logo / Crest)
+ESUT_MAROON = colors.HexColor("#721500")
+ESUT_GREEN = ESUT_MAROON  # Backward compatibility alias
 ESUT_GOLD = colors.HexColor("#c9a84c")
 ESUT_DARK = colors.HexColor("#1a1a2e")
 LIGHT_GRAY = colors.HexColor("#f5f5f5")
 MID_GRAY = colors.HexColor("#888888")
-TABLE_HEADER = colors.HexColor("#1a5c38")
-TABLE_ALT = colors.HexColor("#f0f7f4")
+TABLE_HEADER = colors.HexColor("#721500")
+TABLE_ALT = colors.HexColor("#fdf5f4")
 
 
 def generate_qr_code(data: str) -> io.BytesIO:
     qr = qrcode.QRCode(version=1, box_size=4, border=2)
     qr.add_data(data)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="#1a5c38", back_color="white")
+    img = qr.make_image(fill_color="#721500", back_color="white")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
@@ -70,7 +71,7 @@ def generate_transcript_pdf(
     # ─── HEADER ───────────────────────────────────────────────
     # Build a 2-column header: logo on left, university name + details on right
     header_text = Paragraph(
-        f"""<font color="#1a5c38" size="18"><b>ENUGU STATE UNIVERSITY</b></font><br/>
+        f"""<font color="#721500" size="18"><b>ENUGU STATE UNIVERSITY</b></font><br/>
         <font color="#c9a84c" size="13"><b>OF SCIENCE AND TECHNOLOGY</b></font><br/>
         <font color="#555555" size="9">Agbani, Enugu State, Nigeria</font><br/>
         <font color="#555555" size="8">Tel: +234-042-551234 | registry@esut.edu.ng | www.esut.edu.ng</font>""",
