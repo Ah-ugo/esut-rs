@@ -1,4 +1,5 @@
 import io
+import os
 import qrcode
 from datetime import datetime
 from typing import Dict, List
@@ -15,6 +16,10 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import base64
 import json
+
+# Path to ESUT logo (bundled with the backend)
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
+LOGO_PATH = os.path.join(_STATIC_DIR, "esut-logo.png")
 
 
 # ESUT Brand Colors
@@ -63,23 +68,32 @@ def generate_transcript_pdf(
     story = []
     
     # ─── HEADER ───────────────────────────────────────────────
-    header_data = [[
-        Paragraph(
-            f"""<font color="#1a5c38" size="18"><b>ENUGU STATE UNIVERSITY</b></font><br/>
-            <font color="#c9a84c" size="13"><b>OF SCIENCE AND TECHNOLOGY</b></font><br/>
-            <font color="#555555" size="9">Agbani, Enugu State, Nigeria</font><br/>
-            <font color="#555555" size="8">Tel: +234-042-551234 | registry@esut.edu.ng | www.esut.edu.ng</font>""",
-            ParagraphStyle("header", alignment=TA_CENTER)
-        )
-    ]]
-    
-    header_table = Table(header_data, colWidths=[17*cm])
+    # Build a 2-column header: logo on left, university name + details on right
+    header_text = Paragraph(
+        f"""<font color="#1a5c38" size="18"><b>ENUGU STATE UNIVERSITY</b></font><br/>
+        <font color="#c9a84c" size="13"><b>OF SCIENCE AND TECHNOLOGY</b></font><br/>
+        <font color="#555555" size="9">Agbani, Enugu State, Nigeria</font><br/>
+        <font color="#555555" size="8">Tel: +234-042-551234 | registry@esut.edu.ng | www.esut.edu.ng</font>""",
+        ParagraphStyle("header", alignment=TA_CENTER)
+    )
+
+    if os.path.exists(LOGO_PATH):
+        logo_img = RLImage(LOGO_PATH, width=2.2*cm, height=2.2*cm)
+        header_data = [[logo_img, header_text, logo_img]]
+        col_widths = [2.5*cm, 12*cm, 2.5*cm]
+    else:
+        header_data = [[header_text]]
+        col_widths = [17*cm]
+
+    header_table = Table(header_data, colWidths=col_widths)
     header_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.white),
         ("BOX", (0, 0), (-1, -1), 2, ESUT_GREEN),
         ("LINEBELOW", (0, 0), (-1, 0), 3, ESUT_GOLD),
         ("TOPPADDING", (0, 0), (-1, -1), 10),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
     ]))
     story.append(header_table)
     story.append(Spacer(1, 0.4*cm))

@@ -147,6 +147,43 @@ async def get_current_session(
 
 
 
+@router.get("/sessions")
+async def list_all_sessions(
+    current_user: dict = Depends(require_role("admin", "lecturer", "student")),
+):
+    """Return all distinct academic sessions that have result data or are configured.
+
+    Sources (merged, deduped, sorted descending):
+    1. current_sessions collection  — sessions an admin has officially configured
+    2. results collection           — sessions that have actual result records
+    3. course_assignments collection / courses — sessions from course assignments
+    """
+    db = get_database()
+
+    session_set: set[str] = set()
+
+    # 1. From current_sessions (explicitly configured)
+    async for doc in db.current_sessions.find({"session": {"$ne": None}}):
+        s = doc.get("session")
+        if s:
+            session_set.add(s)
+
+    # 2. From actual result records
+    for s in await db.results.distinct("session"):
+        if s:
+            session_set.add(s)
+
+    # 3. From course assignments
+    for s in await db.courses.distinct("session"):
+        if s:
+            session_set.add(s)
+
+    # Sort descending so the most recent session appears first
+    sessions = sorted(session_set, reverse=True)
+
+    return {"sessions": sessions}
+
+
 @router.get("/pending-results")
 async def get_pending_results(
 

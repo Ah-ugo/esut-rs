@@ -31,6 +31,7 @@ class UserRole(str, Enum):
 class Semester(str, Enum):
     FIRST = "first"
     SECOND = "second"
+    THIRD = "third"
 
 
 class Level(int, Enum):
@@ -39,6 +40,9 @@ class Level(int, Enum):
     L300 = 300
     L400 = 400
     L500 = 500
+    L700 = 700
+    L800 = 800
+    L900 = 900
 
 
 class ResultStatus(str, Enum):
@@ -98,7 +102,7 @@ class ProgrammeBase(BaseModel):
     code: str = Field(..., min_length=2, max_length=20)
     faculty: str
     department: str
-    duration_years: int = Field(..., ge=4, le=6)
+    duration_years: int = Field(..., ge=1, le=7)
     description: Optional[str] = None
 
 
@@ -118,7 +122,7 @@ class CourseBase(BaseModel):
     title: str = Field(..., min_length=3, max_length=200)
     units: int = Field(..., ge=1, le=6)
     semester: Semester
-    level: int = Field(..., ge=100, le=500)
+    level: int = Field(..., ge=100, le=900)
     programme_code: str # Changed from programme_id to use readable code
     is_elective: bool = False
     description: Optional[str] = None
@@ -145,7 +149,7 @@ class StudentBase(BaseModel):
     full_name: str
     email: EmailStr
     programme_id: str
-    level: int = Field(..., ge=100, le=500)
+    level: int = Field(..., ge=100, le=900)
     entry_year: int
     gender: str = Field(..., pattern="^(Male|Female|Other)$")
     date_of_birth: Optional[datetime] = None

@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -33,7 +34,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     
     class Config:
-        env_file = ".env"
+        env_file = (
+            ".env",
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        )
 
 
 settings = Settings()
