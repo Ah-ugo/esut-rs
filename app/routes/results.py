@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Request, File, Up
 from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 from app.database import get_database
 from app.schemas.schemas import (
     ResultCreate, BulkResultUpload, ResultOut, ResultStatus, 
@@ -49,11 +50,18 @@ async def add_result(result_data: ResultCreate, current_user: dict = Depends(req
     grading_system = await get_grading_system(programme_id)
     grade, points, remark = calculate_grade(result_data.score, grading_system)
     
+    filter_query = {
+        "student_id": student_id,
+        "course_id": course_id,
+        "session": result_data.session,
+        "semester": effective_semester,
+    }
+
     result_doc = {
         "student_id": student_id,
-        "matric_number": result_data.matric_number, # Store matric_number for easier lookup/display
+        "matric_number": result_data.matric_number,
         "course_id": course_id,
-        "course_code": result_data.course_code,     # Store course_code for easier lookup/display
+        "course_code": result_data.course_code,
         "lecturer_id": str(current_user["_id"]),
         "score": result_data.score,
         "grade": grade,
@@ -61,14 +69,28 @@ async def add_result(result_data: ResultCreate, current_user: dict = Depends(req
         "session": result_data.session,
         "semester": effective_semester,
         "status": "pending",
-        "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
     
-    res = await db.results.insert_one(result_doc)
-    result_doc["id"] = str(res.inserted_id)
-    if "_id" in result_doc: result_doc["_id"] = str(result_doc["_id"])
-    return result_doc
+    try:
+        existing = await db.results.find_one(filter_query)
+        if existing:
+            await db.results.update_one(filter_query, {"$set": result_doc})
+            result_doc["id"] = str(existing["_id"])
+            result_doc["_id"] = str(existing["_id"])
+            return result_doc
+
+        result_doc["created_at"] = datetime.utcnow()
+        res = await db.results.insert_one(result_doc)
+        result_doc["id"] = str(res.inserted_id)
+        result_doc["_id"] = str(res.inserted_id)
+        return result_doc
+    except DuplicateKeyError:
+        existing = await db.results.find_one(filter_query)
+        await db.results.update_one(filter_query, {"$set": result_doc})
+        result_doc["id"] = str(existing["_id"]) if existing else "updated"
+        result_doc["_id"] = result_doc["id"]
+        return result_doc
 
 @router.post("/upload-csv", status_code=status.HTTP_201_CREATED)
 async def upload_csv_results(
@@ -194,7 +216,14 @@ async def bulk_upload_results(upload_data: BulkResultUpload, current_user: dict 
         })
         
     if results_to_insert:
-        await db.results.insert_many(results_to_insert)
+        for doc in results_to_insert:
+            filter_q = {
+                "student_id": doc["student_id"],
+                "course_id": doc["course_id"],
+                "session": doc["session"],
+                "semester": doc["semester"],
+            }
+            await db.results.update_one(filter_q, {"$set": doc}, upsert=True)
         
     return {"message": f"Successfully processed {len(results_to_insert)} results"}
 
